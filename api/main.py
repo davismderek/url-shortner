@@ -1,11 +1,24 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from db_connect import session
-from models import Links, LinksCreate
-from models import Base
+from db_connect import session, engine
+from models.links import Links, LinksCreate
+from models.base import Base
+from config import settings
+from services import create_user, get_user
+from models.users import User, UserSchema, UserAccountSchema
 
-app = FastAPI()
+
+def create_tables():
+	Base.metadata.create_all(bind=engine)
+     
+def start_aplication():
+     app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
+     create_tables()
+     return app
+     
+app = start_aplication()
+# app = FastAPI()
 
 origins = [
     "http://localhost",
@@ -30,15 +43,45 @@ def get_links():
     linkss = session.query(Links)
     return linkss.all()
 
+@app.get("/users")
+def get_users():
+    users = session.query(User)
+    return users.all()
+
 @app.post("/links/add")
-async def create_link(title:str, original_url:str, short_url:str):
-     new_url= Links(title=title, original_url=original_url, short_url=short_url)
+async def create_link(link_data: LinksCreate):
+     new_url= Links(**link_data.model_dump())
      session.add(new_url)
      session.commit()
-     return {"URL Added": new_url.title}    
-     
-     
+     return {"URL Added": new_url.title} 
 
-def create_tables():
-	Base.metadata.create_all(session)
+   
+     
+@app.post("/register", response_model=UserSchema)
+def register_user(payload: UserAccountSchema):
+     payload.hashed_password = User.hash_password(payload.hashed_password)
+     return create_user(user=payload)
+
+@app.post("/login")
+async def login(payload: UserAccountSchema):
+     try:
+          user: User = get_user(email=payload.email)
+     
+     except:
+          raise HTTPException(
+               status_code=status.HTTP_401_UNAUTHORIZED,
+               detail = "Invalid User Credentials"
+            )
+     
+     is_validated: bool = user.validata_password(payload.hashed_password)
+
+     if not is_validated: 
+          raise HTTPException(
+               status_code=status.HTTP_401_UNAUTHORIZED,
+               detail="Invalid User Credentials"
+          )
+     return {"detail": "Successful Login"}
+
+# def create_tables():
+# 	Base.metadata.create_all(session)
      

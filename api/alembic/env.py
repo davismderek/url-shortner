@@ -8,7 +8,9 @@ from alembic import context
 from config import settings
 
 # from db_connect import url
-from models import Links, Base
+from models.base import Base
+from models.links import Links
+from models.users import User
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
